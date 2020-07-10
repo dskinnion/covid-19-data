@@ -7,9 +7,76 @@ output: html_document
 
 ```{r setup, include=FALSE}
 library(tidyverse)
+options(scipen = 999)
 ```
 
-```{r data, echo = FALSE}
+```{r data read in, echo = FALSE}
+us <- read.csv(file = "us.csv")
 states <- read.csv(file = "us-states.csv")
+counties <- read.csv(file = "us-counties.csv")
+census <- read.csv(file = "census2019est.csv")
+```
+
+```{r clean up census, echo = FALSE}
+census <- census %>%
+  select(NAME, POPESTIMATE2019) %>%
+  mutate(state = ifelse(NAME == "Puerto Rico Commonwealth", "Puerto Rico", NAME)) %>%
+  mutate(popest2019 = POPESTIMATE2019) %>%
+  select(state, popest2019)
+```
+
+```{r adding new cases, echo = FALSE}
+states_list <- unique(states$state)
+
+make_state_df <- function(state_name){
+  
+  states <- states %>%
+    filter(state == state_name) %>%
+    mutate(cases_yesterday = lag(cases)) %>%
+    mutate(new_cases = cases - cases_yesterday) %>%
+    mutate(deaths_yesterday = lag(deaths)) %>%
+    mutate(new_deaths = deaths - deaths_yesterday)
+}
+
+states_with_new_cases <- map_df(states_list, make_state_df)
+```
+
+# first attempt at making state dataframes... might be useful if I need individual dfs for each state
+# ```{r state calculations, echo = FALSE}
+# states_list <- unique(states$state)
+# 
+# make_state_df <- function(state_name){
+#   
+#   object <- states %>%
+#     filter(state == state_name) %>%
+#     mutate(cases_yesterday = lag(cases)) %>%
+#     mutate(new_cases = cases - cases_yesterday) %>%
+#     mutate(deaths_yesterday = lag(deaths)) %>%
+#     mutate(new_deaths = deaths - deaths_yesterday)
+#   
+#   assign(paste(state_name), data.frame(object), envir = .GlobalEnv)
+# }
+# 
+# map_df(states_list, make_state_df)
+# ```
+
+```{r merge census and covid, echo = FALSE}
+states_with_pop <- inner_join(states_with_new_cases, census, by = "state")
+```
+
+```{r adding per capita calcs, echo = FALSE}
+states_with_pc <- states_with_pop %>%
+  mutate(cases_pc = cases / popest2019) %>%
+  mutate(new_cases_pc = new_cases / popest2019) %>%
+  mutate(deaths_pc = deaths / popest2019) %>%
+  mutate(new_deaths_pc = new_deaths / popest2019)
+```
+
+
+```{r}
+states_with_pc %>%
+  filter(state %in% c("Massachusetts", "Virginia", "California")) %>%
+  ggplot(aes(x = date, y = cases_pc, group = state, color = state)) +
+    geom_()
 ```
 
