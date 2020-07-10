@@ -1,0 +1,15 @@
+---
+title: "States Data"
+author: "Dominic Skinnion"
+date: "7/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+```{r data, echo = FALSE}
+states <- read.csv(file = "us-states.csv")
+```
+
