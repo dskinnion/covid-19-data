@@ -15,6 +15,7 @@ us <- read.csv(file = "us.csv")
 states <- read.csv(file = "us-states.csv")
 counties <- read.csv(file = "us-counties.csv")
 census <- read.csv(file = "census2019est.csv")
+election_pres_2016 <- read.csv(file = "1976-2016-president.csv")
 ```
 
 ```{r clean up census, echo = FALSE}
@@ -72,11 +73,32 @@ states_with_pc <- states_with_pop %>%
   mutate(new_deaths_pc = new_deaths / popest2019)
 ```
 
-
-```{r}
+```{r sample data viz, echo = FALSE}
 states_with_pc %>%
   filter(state %in% c("Massachusetts", "Virginia", "California")) %>%
-  ggplot(aes(x = date, y = cases_pc, group = state, color = state)) +
-    geom_()
+  ggplot(aes(x = date, y = new_cases_pc, group = state, color = state)) +
+    geom_line()
+```
+
+```{r election 2016 pres, echo = FALSE}
+election_pres_2016_hrc <- election_pres_2016 %>%
+  filter(year == 2016,
+         office == "US President",
+         party == "democrat",
+         writein == "FALSE") %>%
+  mutate(hrc_votes = candidatevotes) %>%
+  select(year, state, candidate, party, hrc_votes, totalvotes)
+
+election_pres_2016_djt <- election_pres_2016 %>%
+  filter(year == 2016,
+         office == "US President",
+         party == "republican",
+         writein == "FALSE") %>%
+  mutate(djt_votes = candidatevotes) %>%
+  select(year, state, candidate, party, djt_votes, totalvotes)
+
+election_pres_2016_djt_vs_hrc <- inner_join(election_pres_2016_djt, 
+                                            election_pres_2016_hrc, 
+                                            by = c("year", "state", "totalvotes"))
 ```
 
