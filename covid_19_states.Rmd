@@ -16,6 +16,7 @@ states <- read.csv(file = "us-states.csv")
 counties <- read.csv(file = "us-counties.csv")
 census <- read.csv(file = "census2019est.csv")
 election_pres_2016 <- read.csv(file = "1976-2016-president.csv")
+regions <- read.csv(file = "state_regions_and_divisions.csv")
 ```
 
 ```{r clean up census, echo = FALSE}
@@ -113,6 +114,17 @@ election_pres_2016_djt_vs_hrc <- election_pres_2016_djt_vs_hrc %>%
 states_and_election <- inner_join(states_with_pc, election_pres_2016_djt_vs_hrc, by = "state")
 ```
 
+```{r added regions, echo = FALSE}
+regions <- regions %>%
+  mutate(state = State, 
+         region = Region, 
+         division = Division) %>%
+  select(state, region, division)
+
+states_and_election <- inner_join(states_and_election, regions, by = "state")
+```
+
+
 ```{r data exploration, echo = FALSE}
 states_and_election %>%
   ggplot(aes(x = date, y = new_cases, fill = winner)) +
@@ -133,5 +145,35 @@ by_winner %>%
 by_winner %>%
   ggplot(aes(x = date, y = total_new_cases, fill = winner)) +
     geom_bar(stat = "identity", position = "fill")
+```
+
+```{r states total by region, echo = FALSE}
+by_region <- states_and_election %>%
+  group_by(date, region) %>%
+  summarise(total_new_cases = sum(new_cases),
+            avg_new_cases = mean(new_cases),
+            avg_new_cases_pc = mean(new_cases_pc))
+
+by_region %>%
+  ggplot(aes(x = date, y = avg_new_cases_pc, fill = region)) +
+    geom_bar(stat = "identity", position = "fill")
+
+by_region %>%
+  ggplot(aes(x = date, y = total_new_cases, fill = region)) +
+    geom_bar(stat = "identity", position = "fill")
+
+```
+
+```{r states total by region and winner, echo = FALSE}
+by_region_and_winner <- states_and_election %>%
+  group_by(date, region, winner) %>%
+  summarise(total_new_cases = sum(new_cases),
+            avg_new_cases = mean(new_cases),
+            avg_new_cases_pc = mean(new_cases_pc))
+
+by_region_and_winner %>%
+  ggplot(aes(x = date, y = total_new_cases, fill = winner)) +
+    geom_bar(stat = "identity", position = "fill") +
+    facet_wrap(~region)
 ```
 
