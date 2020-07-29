@@ -40,6 +40,8 @@ make_state_df <- function(state_name){
 }
 
 states_with_new_cases <- map_df(states_list, make_state_df)
+states_with_new_cases <- states_with_new_cases %>%
+  mutate_all(~replace(., is.na(.), 0))
 ```
 
 # first attempt at making state dataframes... might be useful if I need individual dfs for each state
@@ -100,5 +102,36 @@ election_pres_2016_djt <- election_pres_2016 %>%
 election_pres_2016_djt_vs_hrc <- inner_join(election_pres_2016_djt, 
                                             election_pres_2016_hrc, 
                                             by = c("year", "state", "totalvotes"))
+
+election_pres_2016_djt_vs_hrc <- election_pres_2016_djt_vs_hrc %>%
+  select(state, djt_votes, hrc_votes, totalvotes) %>%
+  mutate(pct_djt = djt_votes / totalvotes, pct_hrc = hrc_votes / totalvotes) %>%
+  mutate(winner = ifelse(djt_votes > hrc_votes, "Trump", "Clinton"))
+```
+
+```{r joined covid with election, echo = FALSE}
+states_and_election <- inner_join(states_with_pc, election_pres_2016_djt_vs_hrc, by = "state")
+```
+
+```{r data exploration, echo = FALSE}
+states_and_election %>%
+  ggplot(aes(x = date, y = new_cases, fill = winner)) +
+      geom_bar(stat = "identity", position = position_dodge())
+```
+
+```{r states total by winner, echo = FALSE}
+by_winner <- states_and_election %>%
+  group_by(date, winner) %>%
+  summarise(total_new_cases = sum(new_cases),
+            avg_new_cases = mean(new_cases),
+            avg_new_cases_pc = mean(new_cases_pc))
+
+by_winner %>%
+  ggplot(aes(x = date, y = avg_new_cases_pc, fill = winner)) +
+    geom_bar(stat = "identity", position = "fill")
+
+by_winner %>%
+  ggplot(aes(x = date, y = total_new_cases, fill = winner)) +
+    geom_bar(stat = "identity", position = "fill")
 ```
 
