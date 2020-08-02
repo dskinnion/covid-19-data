@@ -4,7 +4,7 @@ author: "Dominic Skinnion"
 date: "7/9/2020"
 output: html_document
 editor_options: 
-  chunk_output_type: console
+chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -17,7 +17,8 @@ us <- read.csv(file = "us.csv")
 states <- read.csv(file = "us-states.csv")
 counties <- read.csv(file = "us-counties.csv")
 census <- read.csv(file = "census2019est.csv")
-election_pres_2016 <- read.csv(file = "1976-2016-president.csv")
+election_pres_2016_states <- read.csv(file = "1976-2016-president.csv")
+election_pres_2016_counties <- read.csv(file = "2016_US_County_Level_Presidential_Results.csv")
 regions <- read.csv(file = "state_regions_and_divisions.csv")
 ```
 
