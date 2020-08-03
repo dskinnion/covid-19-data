@@ -227,7 +227,8 @@ states_final <- states_and_election %>%
   mutate(trump_votes = djt_votes,
          clinton_votes = hrc_votes,
          trump_pct = pct_djt,
-         clinton_pct = pct_hrc) %>%
+         clinton_pct = pct_hrc,
+         date = as.Date.character(date)) %>%
   select(date, state, fips, cases, deaths, new_cases, new_deaths, popest2019, cases_pc, new_cases_pc,
          deaths_pc, new_deaths_pc, trump_pct, clinton_pct, winner, region, division)
 
@@ -235,7 +236,8 @@ counties_final <- counties_and_election %>%
   mutate(county = county.x,
          fips = fips.x,
          region = region_name,
-         division = division_name) %>%
+         division = division_name,
+         date = as.Date.character(date)) %>%
   select(date, county_state, county, state, fips, cases, deaths, new_cases, new_deaths, popest2019, cases_pc,
          new_cases_pc, deaths_pc, new_deaths_pc, trump_pct, clinton_pct, winner, region, division)
 ```
@@ -298,16 +300,19 @@ by_region_and_winner %>%
 
 ```{r counties exploration}
 counties_final %>%
-  group_by(date, winner) %>%
+  group_by(date, region, winner) %>%
   summarize(total_new_cases = sum(new_cases),
             avg_new_cases = mean(new_cases)) %>%
   ggplot(aes(x = date, y = total_new_cases, fill = winner)) +
-    geom_bar(stat = "identity", position = "fill")
+    geom_bar(stat = "identity", position = "fill") +
+    facet_wrap(~region) +
+    scale_x_date(date_breaks = "1 month", date_labels = "%b")
 
 counties_final %>%
-  group_by(date, winner) %>%
+  group_by(date, region, winner) %>%
   summarize(total_cases = sum(cases)) %>%
   ggplot(aes(x = date, y = total_cases, fill = winner)) +
-    geom_bar(stat = "identity", position = "fill")
+    geom_bar(stat = "identity", position = "fill") +
+    facet_wrap(~region)
 ```
 
