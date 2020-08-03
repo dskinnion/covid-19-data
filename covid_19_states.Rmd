@@ -16,21 +16,39 @@ options(scipen = 999)
 us <- read.csv(file = "us.csv")
 states <- read.csv(file = "us-states.csv")
 counties <- read.csv(file = "us-counties.csv")
-census <- read.csv(file = "census2019est.csv")
+census_states <- read.csv(file = "census2019est.csv")
+census_counties <- read.csv(file = "co-est2019-alldata.csv")
 election_pres_2016_states <- read.csv(file = "1976-2016-president.csv")
 election_pres_2016_counties <- read.csv(file = "2016_US_County_Level_Presidential_Results.csv")
 regions <- read.csv(file = "state_regions_and_divisions.csv")
 ```
 
-```{r clean up census, echo = FALSE}
-census <- census %>%
+```{r clean up census states, echo = FALSE}
+census_states <- census_states %>%
   select(NAME, POPESTIMATE2019) %>%
   mutate(state = ifelse(NAME == "Puerto Rico Commonwealth", "Puerto Rico", NAME)) %>%
   mutate(popest2019 = POPESTIMATE2019) %>%
   select(state, popest2019)
 ```
 
-```{r adding new cases, echo = FALSE}
+```{r clean up census counties, echo = FALSE}
+census_counties <- census_counties %>%
+  select(REGION, DIVISION, COUNTY, STNAME, CTYNAME, POPESTIMATE2019) %>%
+  filter(COUNTY != 0) %>%
+  mutate(region = REGION,
+         division = DIVISION,
+         state = STNAME,
+         county1 = str_remove(CTYNAME, " County"),
+         popest2019 = POPESTIMATE2019) %>%
+  mutate(county2 = ifelse(state == "Louisiana", str_remove(county1, " Parish"), county1)) %>%
+  mutate(county = ifelse(county2 == "Do�a Ana", "Doña Ana",
+                          ifelse(county2 == "New York", "New York City",
+                                 ifelse(county2 == "Anchorage Municipality", "Anchorage", county2)))) %>%
+  unite(col = "county_state", county, state, sep = ", ", remove = FALSE) %>%
+  select(county_state, county, state, popest2019, region, division)
+```
+
+```{r adding new cases to states, echo = FALSE}
 states_list <- unique(states$state)
 
 make_state_df <- function(state_name){
@@ -48,30 +66,48 @@ states_with_new_cases <- states_with_new_cases %>%
   mutate_all(~replace(., is.na(.), 0))
 ```
 
-# first attempt at making state dataframes... might be useful if I need individual dfs for each state
-# ```{r state calculations, echo = FALSE}
-# states_list <- unique(states$state)
-# 
-# make_state_df <- function(state_name){
-#   
-#   object <- states %>%
-#     filter(state == state_name) %>%
-#     mutate(cases_yesterday = lag(cases)) %>%
-#     mutate(new_cases = cases - cases_yesterday) %>%
-#     mutate(deaths_yesterday = lag(deaths)) %>%
-#     mutate(new_deaths = deaths - deaths_yesterday)
-#   
-#   assign(paste(state_name), data.frame(object), envir = .GlobalEnv)
-# }
-# 
-# map_df(states_list, make_state_df)
-# ```
+```{r adding new cases to counties, echo = FALSE}
+counties <- counties %>%
+  filter(county != "Unknown") %>%
+  unite(col = "county_state", county, state, sep = ", ", remove = FALSE)
 
-```{r merge census and covid, echo = FALSE}
-states_with_pop <- inner_join(states_with_new_cases, census, by = "state")
+counties_list <- unique(counties$county_state)
+
+make_county_df <- function(county_name){
+  
+  counties <- counties %>%
+    filter(county_state == county_name) %>%
+    mutate(cases_yesterday = lag(cases)) %>%
+    mutate(new_cases = cases - cases_yesterday) %>%
+    mutate(deaths_yesterday = lag(deaths)) %>%
+    mutate(new_deaths = deaths - deaths_yesterday)
+}
+
+counties_with_new_cases <- map_df(counties_list, make_county_df)
+counties_with_new_cases <- counties_with_new_cases %>%
+  mutate_all(~replace(., is.na(.), 0))
 ```
 
-```{r adding per capita calcs, echo = FALSE}
+```{r}
+census_counties_list <- unique(census_counties$county_state)
+
+setdiff(counties_list, census_counties_list)
+setdiff(census_counties_list, counties_list)
+```
+
+```{r merge census and covid states, echo = FALSE}
+states_with_pop <- inner_join(states_with_new_cases, census_states, by = "state")
+```
+
+```{r merge census and covid counties, echo = FALSE}
+counties_with_pop <- inner_join(counties_with_new_cases, census_counties, by = "county_state") %>%
+  mutate(county = county.x,
+         state = state.x) %>%
+  select(date, county_state, county, state, fips, cases, deaths, cases_yesterday, new_cases, deaths_yesterday, new_deaths, popest2019, region, division)
+```
+
+
+```{r adding per capita calcs states, echo = FALSE}
 states_with_pc <- states_with_pop %>%
   mutate(cases_pc = cases / popest2019) %>%
   mutate(new_cases_pc = new_cases / popest2019) %>%
@@ -79,15 +115,16 @@ states_with_pc <- states_with_pop %>%
   mutate(new_deaths_pc = new_deaths / popest2019)
 ```
 
-```{r sample data viz, echo = FALSE}
-states_with_pc %>%
-  filter(state %in% c("Massachusetts", "Virginia", "California")) %>%
-  ggplot(aes(x = date, y = new_cases_pc, group = state, color = state)) +
-    geom_line()
+```{r adding per capita calcs counties, echo = FALSE}
+counties_with_pc <- counties_with_pop %>%
+  mutate(cases_pc = cases / popest2019) %>%
+  mutate(new_cases_pc = new_cases / popest2019) %>%
+  mutate(deaths_pc = deaths / popest2019) %>%
+  mutate(new_deaths_pc = new_deaths / popest2019)
 ```
 
-```{r election 2016 pres, echo = FALSE}
-election_pres_2016_hrc <- election_pres_2016 %>%
+```{r election 2016 pres states, echo = FALSE}
+election_pres_2016_hrc_states <- election_pres_2016_states %>%
   filter(year == 2016,
          office == "US President",
          party == "democrat",
@@ -95,7 +132,7 @@ election_pres_2016_hrc <- election_pres_2016 %>%
   mutate(hrc_votes = candidatevotes) %>%
   select(year, state, candidate, party, hrc_votes, totalvotes)
 
-election_pres_2016_djt <- election_pres_2016 %>%
+election_pres_2016_djt_states <- election_pres_2016_states %>%
   filter(year == 2016,
          office == "US President",
          party == "republican",
@@ -103,18 +140,24 @@ election_pres_2016_djt <- election_pres_2016 %>%
   mutate(djt_votes = candidatevotes) %>%
   select(year, state, candidate, party, djt_votes, totalvotes)
 
-election_pres_2016_djt_vs_hrc <- inner_join(election_pres_2016_djt, 
-                                            election_pres_2016_hrc, 
+election_pres_2016_djt_vs_hrc_states <- inner_join(election_pres_2016_djt_states, 
+                                            election_pres_2016_hrc_states, 
                                             by = c("year", "state", "totalvotes"))
 
-election_pres_2016_djt_vs_hrc <- election_pres_2016_djt_vs_hrc %>%
+election_pres_2016_djt_vs_hrc_states <- election_pres_2016_djt_vs_hrc_states %>%
   select(state, djt_votes, hrc_votes, totalvotes) %>%
   mutate(pct_djt = djt_votes / totalvotes, pct_hrc = hrc_votes / totalvotes) %>%
   mutate(winner = ifelse(djt_votes > hrc_votes, "Trump", "Clinton"))
 ```
 
+```{r election 2016 pres counties, echo = FALSE}
+election_pres_2016_counties <- election_pres_2016_counties %>%
+  mutate(county = str_remove(county_name, " County"))
+```
+
+
 ```{r joined covid with election, echo = FALSE}
-states_and_election <- inner_join(states_with_pc, election_pres_2016_djt_vs_hrc, by = "state")
+states_and_election <- inner_join(states_with_pc, election_pres_2016_djt_vs_hrc_states, by = "state")
 ```
 
 ```{r added regions, echo = FALSE}
