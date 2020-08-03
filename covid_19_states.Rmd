@@ -4,7 +4,7 @@ author: "Dominic Skinnion"
 date: "7/9/2020"
 output: html_document
 editor_options: 
-chunk_output_type: console
+chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
@@ -19,8 +19,9 @@ counties <- read.csv(file = "us-counties.csv")
 census_states <- read.csv(file = "census2019est.csv")
 census_counties <- read.csv(file = "co-est2019-alldata.csv")
 election_pres_2016_states <- read.csv(file = "1976-2016-president.csv")
-election_pres_2016_counties <- read.csv(file = "2016_US_County_Level_Presidential_Results.csv")
+election_pres_2016_counties <- read.csv(file = "2016-election-counties.csv")
 regions <- read.csv(file = "state_regions_and_divisions.csv")
+fips_codes <- read.csv(file = "county_fips_master.csv")
 ```
 
 ```{r clean up census states, echo = FALSE}
@@ -88,13 +89,6 @@ counties_with_new_cases <- counties_with_new_cases %>%
   mutate_all(~replace(., is.na(.), 0))
 ```
 
-```{r}
-census_counties_list <- unique(census_counties$county_state)
-
-setdiff(counties_list, census_counties_list)
-setdiff(census_counties_list, counties_list)
-```
-
 ```{r merge census and covid states, echo = FALSE}
 states_with_pop <- inner_join(states_with_new_cases, census_states, by = "state")
 ```
@@ -150,15 +144,73 @@ election_pres_2016_djt_vs_hrc_states <- election_pres_2016_djt_vs_hrc_states %>%
   mutate(winner = ifelse(djt_votes > hrc_votes, "Trump", "Clinton"))
 ```
 
-```{r election 2016 pres counties, echo = FALSE}
+```{r clean up election 2016 pres counties, echo = FALSE}
 election_pres_2016_counties <- election_pres_2016_counties %>%
-  mutate(county = str_remove(county_name, " County"))
+  mutate(fips = cod,
+         total = votes,
+         first = ifelse(candidate1 == "t", "Trump", 
+                        ifelse(candidate1 == "c", "Clinton",
+                               ifelse(candidate1 == "j", "Johnson", candidate1))),
+         second = ifelse(candidate2 == "t", "Trump", 
+                        ifelse(candidate2 == "c", "Clinton",
+                               ifelse(candidate2 == "j", "Johnson", candidate2))),
+         third = ifelse(candidate3 == "t", "Trump", 
+                        ifelse(candidate3 == "c", "Clinton",
+                               ifelse(candidate3 == "j", "Johnson", candidate3))),
+         clinton_place = c,
+         trump_place = t,
+         johnson_place = j,
+         first_votes = c1v,
+         second_votes = c2v,
+         third_votes = c3v,
+         first_pct = c1p,
+         second_pct = c2p,
+         third_pct = c3p) %>%
+  select(fips, total, first, second, third, clinton_place, trump_place, johnson_place, first_votes, second_votes,
+         third_votes, first_pct, second_pct, third_pct) %>%
+  mutate(clinton_votes = ifelse(clinton_place == "1", first_votes,
+                                ifelse(clinton_place == "2", second_votes, third_votes))) %>%
+  mutate(trump_votes = ifelse(trump_place == "1", first_votes,
+                                ifelse(trump_place == "2", second_votes, third_votes))) %>%
+  mutate(johnson_votes = ifelse(johnson_place == "1", first_votes,
+                                ifelse(johnson_place == "2", second_votes, third_votes))) %>%
+  mutate(clinton_pct = clinton_votes / total,
+         trump_pct = trump_votes / total,
+         johnson_pct = johnson_votes / total) %>%
+  mutate(winner = first) %>%
+  select(fips, clinton_pct, trump_pct, winner)
 ```
 
+```{r join county election with fips codes, echo = FALSE}
+election_pres_2016_counties_with_names <- inner_join(election_pres_2016_counties, fips_codes, by = "fips") %>%
+  select(fips, county_name, state_name, winner, trump_pct, clinton_pct, region_name, division_name) %>%
+  mutate(county1 = str_remove(county_name, " County")) %>%
+  mutate(county2 = ifelse(state_name == "Louisiana", str_remove(county1, " Parish"), county1)) %>%
+  mutate(county = ifelse(county2 == "Do�a Ana", "Doña Ana",
+                          ifelse(county2 == "New York", "New York City", 
+                                 ifelse(county2 == "La Salle" & state_name == "Louisiana", "LaSalle", county2)))) %>%
+  unite(col = "county_state", county, state_name, sep = ", ", remove = FALSE)
 
-```{r joined covid with election, echo = FALSE}
+## No election data for Alaska counties, and Kansas City & Joplin, MO are falsely listed as counties
+## Parish is taken off the end of all Louisiana counties
+```
+
+```{r testing to see which counties are incomplete, echo = FALSE}
+election_counties_list <- unique(election_pres_2016_counties_with_names$county_state)
+
+setdiff(election_counties_list, counties_list)
+setdiff(counties_list, election_counties_list)
+
+```
+
+```{r joined covid with election states, echo = FALSE}
 states_and_election <- inner_join(states_with_pc, election_pres_2016_djt_vs_hrc_states, by = "state")
 ```
+
+```{r join covid with election counties, echo = FALSE}
+counties_and_election <- inner_join(counties_with_pc, election_pres_2016_counties_with_names, by = "county_state")
+```
+
 
 ```{r added regions, echo = FALSE}
 regions <- regions %>%
@@ -170,25 +222,46 @@ regions <- regions %>%
 states_and_election <- inner_join(states_and_election, regions, by = "state")
 ```
 
+```{r making sure variables are called same thing in each set, echo = FALSE}
+states_final <- states_and_election %>%
+  mutate(trump_votes = djt_votes,
+         clinton_votes = hrc_votes,
+         trump_pct = pct_djt,
+         clinton_pct = pct_hrc) %>%
+  select(date, state, fips, cases, deaths, new_cases, new_deaths, popest2019, cases_pc, new_cases_pc,
+         deaths_pc, new_deaths_pc, trump_pct, clinton_pct, winner, region, division)
+
+counties_final <- counties_and_election %>%
+  mutate(county = county.x,
+         fips = fips.x,
+         region = region_name,
+         division = division_name) %>%
+  select(date, county_state, county, state, fips, cases, deaths, new_cases, new_deaths, popest2019, cases_pc,
+         new_cases_pc, deaths_pc, new_deaths_pc, trump_pct, clinton_pct, winner, region, division)
+```
 
 ```{r data exploration, echo = FALSE}
-states_and_election %>%
+states_final %>%
+  ggplot(aes(x = date, y = new_cases, fill = winner)) +
+      geom_bar(stat = "identity", position = position_dodge())
+
+counties_final %>%
   ggplot(aes(x = date, y = new_cases, fill = winner)) +
       geom_bar(stat = "identity", position = position_dodge())
 ```
 
 ```{r states total by winner, echo = FALSE}
-by_winner <- states_and_election %>%
+states_by_winner <- states_final %>%
   group_by(date, winner) %>%
   summarise(total_new_cases = sum(new_cases),
             avg_new_cases = mean(new_cases),
             avg_new_cases_pc = mean(new_cases_pc))
 
-by_winner %>%
+states_by_winner %>%
   ggplot(aes(x = date, y = avg_new_cases_pc, fill = winner)) +
     geom_bar(stat = "identity", position = "fill")
 
-by_winner %>%
+states_by_winner %>%
   ggplot(aes(x = date, y = total_new_cases, fill = winner)) +
     geom_bar(stat = "identity", position = "fill")
 ```
@@ -221,5 +294,20 @@ by_region_and_winner %>%
   ggplot(aes(x = date, y = total_new_cases, fill = winner)) +
     geom_bar(stat = "identity", position = "fill") +
     facet_wrap(~region)
+```
+
+```{r counties exploration}
+counties_final %>%
+  group_by(date, winner) %>%
+  summarize(total_new_cases = sum(new_cases),
+            avg_new_cases = mean(new_cases)) %>%
+  ggplot(aes(x = date, y = total_new_cases, fill = winner)) +
+    geom_bar(stat = "identity", position = "fill")
+
+counties_final %>%
+  group_by(date, winner) %>%
+  summarize(total_cases = sum(cases)) %>%
+  ggplot(aes(x = date, y = total_cases, fill = winner)) +
+    geom_bar(stat = "identity", position = "fill")
 ```
 
