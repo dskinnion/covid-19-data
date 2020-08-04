@@ -14,8 +14,8 @@ options(scipen = 999)
 
 ```{r data read in, echo = FALSE}
 us <- read.csv(file = "us.csv")
-states <- read.csv(file = "us-states.csv")
-counties <- read.csv(file = "us-counties.csv")
+states <- read.csv(file = "8-2-us-states.csv")
+counties <- read.csv(file = "8-2-us-counties.csv")
 census_states <- read.csv(file = "census2019est.csv")
 census_counties <- read.csv(file = "co-est2019-alldata.csv")
 election_pres_2016_states <- read.csv(file = "1976-2016-president.csv")
@@ -191,7 +191,7 @@ election_pres_2016_counties_with_names <- inner_join(election_pres_2016_counties
                                  ifelse(county2 == "La Salle" & state_name == "Louisiana", "LaSalle", county2)))) %>%
   unite(col = "county_state", county, state_name, sep = ", ", remove = FALSE)
 
-## No election data for Alaska counties, and Kansas City & Joplin, MO are falsely listed as counties
+## No election data for Alaskan, Puerto Rican, or territory counties, and Kansas City & Joplin, MO are falsely listed as counties
 ## Parish is taken off the end of all Louisiana counties
 ```
 
@@ -314,5 +314,18 @@ counties_final %>%
   ggplot(aes(x = date, y = total_cases, fill = winner)) +
     geom_bar(stat = "identity", position = "fill") +
     facet_wrap(~region)
+
+counties_final %>%
+  group_by(date, division, winner) %>%
+  summarize(total_new_cases = sum(new_cases),
+            avg_new_cases = mean(new_cases),
+            avg_new_cases_pc = mean(new_cases_pc),
+            avg_cases = mean(cases),
+            avg_cases_pc = mean(cases_pc)) %>%
+  ggplot(aes(x = date, y = avg_cases_pc, color = winner)) +
+    geom_line() +
+    facet_wrap(~division) +
+    scale_x_date(date_breaks = "1 month", date_labels = "%b")
+
 ```
 
